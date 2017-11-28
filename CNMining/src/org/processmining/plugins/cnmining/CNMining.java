@@ -106,139 +106,42 @@ public class CNMining
 	    return startCNMining(context, log, settings, true);
 	}
 	
-	public static Object[] CausalScoreMatrix(UIPluginContext context, XLog log, Settings settings, boolean uiMode, ConstraintsManager vincoli, CNMining cnmining, boolean vincoliDisponibili, UnfoldResult unfoldResult){
+	public static Object[] FaseFinale(UIPluginContext context, XLog log, Settings settings, boolean uiMode, 
+					      ConstraintsManager vincoli, CNMining cnmining, boolean vincoliDisponibili, 
+					      UnfoldResult unfoldResult, double[][] bestNextMatrix, Object[] keys, 
+					      Graph grafoUnfolded, double[][] causalScoreMatrix, UnfoldResult foldResult, 
+					      Graph grafoFoldedOriginale, Graph grafoPG0, double[][] causalScoreMatrixResidua, 
+					      Flex flexDiagram, CNMiningDiagram diagram)
+	{
+		if(uiMode){
+        	context.getProgress().setValue(85);     
+        	context.getProgress().setValue(100);
+    		
+    		context.getFutureResult(0).setLabel(flexDiagram.getLabel());
+        	context.getFutureResult(1).setLabel("Start tasks node of " + flexDiagram.getLabel());
+        	context.getFutureResult(2).setLabel("End tasks node of " + flexDiagram.getLabel());
+        	context.getFutureResult(3).setLabel("Annotations of " + flexDiagram.getLabel());
+     
+        	context.addConnection(new FlexStartTaskNodeConnection("Start tasks node of " + flexDiagram.getLabel() + 
+    			" connection", flexDiagram, diagram.startTaskNodes));
+        	context.addConnection(new FlexEndTaskNodeConnection("End tasks node of " + flexDiagram.getLabel() + 
+    			" connection", flexDiagram, diagram.endTaskNodes));
+        	context.addConnection(new CausalNetAnnotationsConnection("Annotations of " + flexDiagram.getLabel() + 
+    			" connection", flexDiagram, diagram.annotations));
+         	
+        	visualize(flexDiagram);
+    	}	
+
+    	return new Object[] { flexDiagram, diagram.startTaskNodes, diagram.endTaskNodes, diagram.annotations };
+	}
+	
+	public static Object[] PostProcessing(UIPluginContext context, XLog log, Settings settings, boolean uiMode, 
+					      ConstraintsManager vincoli, CNMining cnmining, boolean vincoliDisponibili, 
+					      UnfoldResult unfoldResult, double[][] bestNextMatrix, Object[] keys, 
+					      Graph grafoUnfolded, double[][] causalScoreMatrix, UnfoldResult foldResult, 
+					      Graph grafoFoldedOriginale, Graph grafoPG0, double[][] causalScoreMatrixResidua)
+	{
 		if(uiMode)
-			context.getProgress().setValue(10);
-     
-		System.out.println("Causal Score Matrix...");
-     
-		double[][] causalScoreMatrix = cnmining.calcoloMatriceDeiCausalScore(log, unfoldResult.map, unfoldResult.traccia_attivita, settings.fallFactor);
-
-		System.out.println("Best Next Matrix...");
-
-		double[][] bestNextMatrix = cnmining.buildBestNextMatrix(log, unfoldResult.map, unfoldResult.traccia_attivita, causalScoreMatrix, vincoli.forbiddenUnfolded);
-     
-		if (settings.sigmaLogNoise > 0.0D)
-		{
-			for (int i = 0; i < bestNextMatrix.length; i++)
-			{
-				for (int j = 0; j < bestNextMatrix.length; j++)
-				{
-					if (bestNextMatrix[i][j] <= settings.sigmaLogNoise * unfoldResult.traccia_attivita.size())
-					{
-						bestNextMatrix[i][j] = 0.0D; 
-					}
-				}
-			}
-		}
-
-		Object[] keys = unfoldResult.map.keys;
-		
-		System.out.println("Costruzione del grafo unfolded originale...");
-				
-		Graph grafoUnfolded = cnmining.costruisciGrafoUnfolded(unfoldResult.map, bestNextMatrix);
-		 
-	    System.out.println("Costruzione del grafo folded originale...");
-     
-	    UnfoldResult foldResult = new UnfoldResult();
-	    
-	  	Graph grafoFoldedOriginale = cnmining.getGrafoAggregato(
-	  		grafoUnfolded, log, true, foldResult.map, 
-	  		foldResult.attivita_tracce, 
-	  		foldResult.traccia_attivita
-	  	);
-	  	     
-	  	if (!cnmining.verifica_consistenza_vincoli(vincoli.positivi, vincoli.negati)) {
-	  		System.out.println("\nImpossibile proseguire\nI Vincoli non sono consistenti");
-	  		System.exit(0);
-	  	}
-	  	else System.out.println("I Vincoli sono consistenti");
-	  	
-	  	if (vincoliDisponibili) {
-	  		System.out.println("Stampa il grafo folded PG0...");
-       
-	  		cnmining.costruisciGrafoPG0(
-  				grafoUnfolded, bestNextMatrix, vincoli.positiviUnfolded, 
-  				vincoli.positivi, vincoli.negatiUnfolded, 
-  				vincoli.negati, vincoli.forbidden, 
-  				vincoli.forbiddenUnfolded, 
-  				unfoldResult.map, (ObjectObjectOpenHashMap)unfoldResult.attivita_tracce, 
-  				unfoldResult.traccia_attivita, causalScoreMatrix, settings.sigmaLowCsConstrEdges, 
-  				grafoFoldedOriginale, foldResult.map
-  			);
-       
-	       Graph grafoPG0 = cnmining.getGrafoAggregato(
-    		   grafoUnfolded, log, false, foldResult.map, foldResult.attivita_tracce, 
-    		   foldResult.traccia_attivita
-		   );
-       
-	       System.out.println();
-	       
-	       if (!cnmining.verificaVincoliPositivi(grafoPG0, null, null, vincoli.positivi, foldResult.map)) {
-	    	   System.out.println("Fallimento\nIl grafo PG0 non soddisfa i vincoli positivi!");
-	    	   System.exit(0);
-	       }
-	  	}
-     
-	  	if(uiMode)
-	  		context.getProgress().setValue(30);
-	  	
-	  	/*
-	  	ObjectArrayList<FakeDependency> attivitaParallele = cnmining.getAttivitaParallele(
-	  		bestNextMatrix, grafoUnfolded, unfoldResult.map, vincoli.positivi, 
-	  		foldResult.map, grafoFoldedOriginale
-		);
-		*/
-	  	
-	  	System.out.println("Esecuzione algortimo 2... ");
-  
-	  	cnmining.algoritmo2(
-  			bestNextMatrix, grafoUnfolded, unfoldResult.map, (ObjectObjectOpenHashMap)unfoldResult.attivita_tracce,
-  			unfoldResult.traccia_attivita, causalScoreMatrix, settings.sigmaUpCsDiff, foldResult.map, 
-  			vincoli.forbidden, vincoli.positivi, vincoli.negati
-		);
-	  	
-	  	System.out.println("Costruisco il grafo folded dopo algoritmo 2");
-     
-	  	Graph grafoFolded = cnmining.getGrafoAggregato(
-			grafoUnfolded, log, false, foldResult.map, 
-			foldResult.attivita_tracce, 
-			foldResult.traccia_attivita
-	  	);
-     
- 
-	  	for (int ni = 0; ni < grafoUnfolded.listaNodi().size(); ni++) {
-	  		Node n = (Node)grafoUnfolded.listaNodi().get(ni);
-	  		n.setMark(false);
-	  	}
-     
-	  	/*
-	  	ObjectArrayList<FakeDependency> attivitaParalleleResidue = cnmining.getAttivitaParallele(
-	  		bestNextMatrix, grafoUnfolded, unfoldResult.map, 
-	  		vincoli.positivi, foldResult.map, grafoFolded
-	  	);
-	  	*/
-     
-	  	// Verifica sul folding
-  		for (int jj = 0; jj < grafoFolded.getLista_archi().size(); jj++)
-  		{
-  			Edge e = (Edge)grafoFolded.getLista_archi().get(jj);
-       
-  			for (int kk = 0; kk < vincoli.positivi.size(); kk++) {
-  				Constraint c = (Constraint)vincoli.positivi.get(kk);
-  				if ((c.getBodyList().contains(e.getX().getNomeAttivita())) && (c.getHeadList().contains(e.getY().getNomeAttivita())))
-  				{ 
-  					e.setFlag(true);
-  					System.out.println(e + " OK!!!!!!");
-  					break;
-  				}
-  				System.out.println("NOT OK!!!!!!!");
-  			}
-  		}
-  		
-  		double[][] causalScoreMatrixResidua = cnmining.calcoloMatriceDeiCausalScore(log, foldResult.map, foldResult.traccia_attivita, settings.fallFactor);
-     
-  		if(uiMode)
   			context.getProgress().setValue(55);
      
 	    System.out.println("PostProcessing: rimozione dipendenze indirette... ");
@@ -365,27 +268,150 @@ public class CNMining
     	Flex flexDiagram = diagram.flex();
  
     	System.out.println();
-    	
-    	if(uiMode){
-        	context.getProgress().setValue(85);     
-        	context.getProgress().setValue(100);
-    		
-    		context.getFutureResult(0).setLabel(flexDiagram.getLabel());
-        	context.getFutureResult(1).setLabel("Start tasks node of " + flexDiagram.getLabel());
-        	context.getFutureResult(2).setLabel("End tasks node of " + flexDiagram.getLabel());
-        	context.getFutureResult(3).setLabel("Annotations of " + flexDiagram.getLabel());
+		return FaseFinale(context, log, settings, uiMode, vincoli, cnmining, vincoliDisponibili, unfoldResult, 
+				      bestNextMatrix, keys, grafoUnfolded, causalScoreMatrix, foldResult, grafoFoldedOriginale, 
+				      grafoPG0, causalScoreMatrixResidua, flexDiagram, diagram);
+	}
+	
+	public static Object[] Algoritmo2(UIPluginContext context, XLog log, Settings settings, boolean uiMode, ConstraintsManager vincoli, CNMining cnmining, boolean vincoliDisponibili, UnfoldResult unfoldResult, double[][] bestNextMatrix, Object[] keys, Graph grafoUnfolded, double[][] causalScoreMatrix, UnfoldResult foldResult, Graph grafoFoldedOriginale, Graph grafoPG0)
+	{
+		if(uiMode)
+	  		context.getProgress().setValue(30);
+	  	
+	  	/*
+	  	ObjectArrayList<FakeDependency> attivitaParallele = cnmining.getAttivitaParallele(
+	  		bestNextMatrix, grafoUnfolded, unfoldResult.map, vincoli.positivi, 
+	  		foldResult.map, grafoFoldedOriginale
+		);
+		*/
+	  	
+	  	System.out.println("Esecuzione algortimo 2... ");
+  
+	  	cnmining.algoritmo2(
+  			bestNextMatrix, grafoUnfolded, unfoldResult.map, (ObjectObjectOpenHashMap)unfoldResult.attivita_tracce,
+  			unfoldResult.traccia_attivita, causalScoreMatrix, settings.sigmaUpCsDiff, foldResult.map, 
+  			vincoli.forbidden, vincoli.positivi, vincoli.negati
+		);
+	  	
+	  	System.out.println("Costruisco il grafo folded dopo algoritmo 2");
      
-        	context.addConnection(new FlexStartTaskNodeConnection("Start tasks node of " + flexDiagram.getLabel() + 
-    			" connection", flexDiagram, diagram.startTaskNodes));
-        	context.addConnection(new FlexEndTaskNodeConnection("End tasks node of " + flexDiagram.getLabel() + 
-    			" connection", flexDiagram, diagram.endTaskNodes));
-        	context.addConnection(new CausalNetAnnotationsConnection("Annotations of " + flexDiagram.getLabel() + 
-    			" connection", flexDiagram, diagram.annotations));
-         	
-        	visualize(flexDiagram);
-    	}	
+	  	Graph grafoFolded = cnmining.getGrafoAggregato(
+			grafoUnfolded, log, false, foldResult.map, 
+			foldResult.attivita_tracce, 
+			foldResult.traccia_attivita
+	  	);
+     
+ 
+	  	for (int ni = 0; ni < grafoUnfolded.listaNodi().size(); ni++) {
+	  		Node n = (Node)grafoUnfolded.listaNodi().get(ni);
+	  		n.setMark(false);
+	  	}
+     
+	  	/*
+	  	ObjectArrayList<FakeDependency> attivitaParalleleResidue = cnmining.getAttivitaParallele(
+	  		bestNextMatrix, grafoUnfolded, unfoldResult.map, 
+	  		vincoli.positivi, foldResult.map, grafoFolded
+	  	);
+	  	*/
+     
+	  	// Verifica sul folding
+  		for (int jj = 0; jj < grafoFolded.getLista_archi().size(); jj++)
+  		{
+  			Edge e = (Edge)grafoFolded.getLista_archi().get(jj);
+       
+  			for (int kk = 0; kk < vincoli.positivi.size(); kk++) {
+  				Constraint c = (Constraint)vincoli.positivi.get(kk);
+  				if ((c.getBodyList().contains(e.getX().getNomeAttivita())) && (c.getHeadList().contains(e.getY().getNomeAttivita())))
+  				{ 
+  					e.setFlag(true);
+  					System.out.println(e + " OK!!!!!!");
+  					break;
+  				}
+  				System.out.println("NOT OK!!!!!!!");
+  			}
+  		}
+  		
+  		double[][] causalScoreMatrixResidua = cnmining.calcoloMatriceDeiCausalScore(log, foldResult.map, foldResult.traccia_attivita, settings.fallFactor);
+		return PostProcessing(context, log, settings, uiMode, vincoli, cnmining, vincoliDisponibili, unfoldResult, 
+				      bestNextMatrix, keys, grafoUnfolded, causalScoreMatrix, foldResult, grafoFoldedOriginale, 
+				      grafoPG0, causalScoreMatrixResidua);
+	}
+	
+	public static Object[] CausalScoreMatrix(UIPluginContext context, XLog log, Settings settings, boolean uiMode, ConstraintsManager vincoli, CNMining cnmining, boolean vincoliDisponibili, UnfoldResult unfoldResult)
+	{
+		if(uiMode)
+			context.getProgress().setValue(10);
+     
+		System.out.println("Causal Score Matrix...");
+     
+		double[][] causalScoreMatrix = cnmining.calcoloMatriceDeiCausalScore(log, unfoldResult.map, unfoldResult.traccia_attivita, settings.fallFactor);
 
-    	return new Object[] { flexDiagram, diagram.startTaskNodes, diagram.endTaskNodes, diagram.annotations };
+		System.out.println("Best Next Matrix...");
+
+		double[][] bestNextMatrix = cnmining.buildBestNextMatrix(log, unfoldResult.map, unfoldResult.traccia_attivita, causalScoreMatrix, vincoli.forbiddenUnfolded);
+     
+		if (settings.sigmaLogNoise > 0.0D)
+		{
+			for (int i = 0; i < bestNextMatrix.length; i++)
+			{
+				for (int j = 0; j < bestNextMatrix.length; j++)
+				{
+					if (bestNextMatrix[i][j] <= settings.sigmaLogNoise * unfoldResult.traccia_attivita.size())
+					{
+						bestNextMatrix[i][j] = 0.0D; 
+					}
+				}
+			}
+		}
+
+		Object[] keys = unfoldResult.map.keys;
+		
+		System.out.println("Costruzione del grafo unfolded originale...");
+				
+		Graph grafoUnfolded = cnmining.costruisciGrafoUnfolded(unfoldResult.map, bestNextMatrix);
+		 
+	    System.out.println("Costruzione del grafo folded originale...");
+     
+	    UnfoldResult foldResult = new UnfoldResult();
+	    
+	  	Graph grafoFoldedOriginale = cnmining.getGrafoAggregato(
+	  		grafoUnfolded, log, true, foldResult.map, 
+	  		foldResult.attivita_tracce, 
+	  		foldResult.traccia_attivita
+	  	);
+	  	     
+	  	if (!cnmining.verifica_consistenza_vincoli(vincoli.positivi, vincoli.negati)) {
+	  		System.out.println("\nImpossibile proseguire\nI Vincoli non sono consistenti");
+	  		System.exit(0);
+	  	}
+	  	else System.out.println("I Vincoli sono consistenti");
+	  	
+	  	if (vincoliDisponibili) {
+	  		System.out.println("Stampa il grafo folded PG0...");
+       
+	  		cnmining.costruisciGrafoPG0(
+  				grafoUnfolded, bestNextMatrix, vincoli.positiviUnfolded, 
+  				vincoli.positivi, vincoli.negatiUnfolded, 
+  				vincoli.negati, vincoli.forbidden, 
+  				vincoli.forbiddenUnfolded, 
+  				unfoldResult.map, (ObjectObjectOpenHashMap)unfoldResult.attivita_tracce, 
+  				unfoldResult.traccia_attivita, causalScoreMatrix, settings.sigmaLowCsConstrEdges, 
+  				grafoFoldedOriginale, foldResult.map
+  			);
+       
+	       Graph grafoPG0 = cnmining.getGrafoAggregato(
+    		   grafoUnfolded, log, false, foldResult.map, foldResult.attivita_tracce, 
+    		   foldResult.traccia_attivita
+		   );
+       
+	       System.out.println();
+	       
+	       if (!cnmining.verificaVincoliPositivi(grafoPG0, null, null, vincoli.positivi, foldResult.map)) {
+	    	   System.out.println("Fallimento\nIl grafo PG0 non soddisfa i vincoli positivi!");
+	    	   System.exit(0);
+	       }
+	  	}
+     return Algoritmo2(context, log, settings, uiMode, vincoli, cnmining, vincoliDisponibili, unfoldResult, bestNextMatrix, keys, grafoUnfolded, causalScoreMatrix, foldResult, grafoFoldedOriginale, grafoPG0)
 	}
 	
 	public static Object[] startCNMining(UIPluginContext context, XLog log, Settings settings, boolean uiMode) throws Exception
