@@ -106,32 +106,7 @@ public class CNMining
 	    return startCNMining(context, log, settings, true);
 	}
 	
-	public static Object[] startCNMining(UIPluginContext context, XLog log, Settings settings, boolean uiMode) throws Exception
-	{
-		ConstraintsManager vincoli = new ConstraintsManager();
-		
-		if(uiMode)
-			context.getProgress().setValue(1);
-		
-		System.out.println("\nCNMining\n\nSettings:");
-	    System.out.println("Sigma log noise: " + settings.sigmaLogNoise);
-	    System.out.println("Delta fall factor: " + settings.fallFactor);
-	    System.out.println("Relative to best: " + settings.relativeToBest);
-
-		CNMining cnmining = new CNMining();
-		
-		boolean vincoliDisponibili = cnmining.caricaVincoli(vincoli, settings);
- 
-		cnmining.aggiungiAttivitaFittizia(log);
-		
-		UnfoldResult unfoldResult = LogUnfolder.unfold(log);
-     
-		if (vincoliDisponibili) {
-			cnmining.creaVincoliUnfolded(
-				vincoli.positivi, vincoli.negati, vincoli.forbidden, vincoli.positiviUnfolded, 
-				vincoli.negatiUnfolded, vincoli.forbiddenUnfolded, unfoldResult.map
-			);
-		}
+	public static Object[] CausalScoreMatrix(UIPluginContext context, XLog log, Settings settings, boolean uiMode, ConstraintsManager vincoli, CNMining cnmining, boolean vincoliDisponibili, UnfoldResult unfoldResult) throws Exception{
 		if(uiMode)
 			context.getProgress().setValue(10);
      
@@ -204,8 +179,7 @@ public class CNMining
 	    	   System.exit(0);
 	       }
 	  	}
-     
-	  	if(uiMode)
+		if(uiMode)
 	  		context.getProgress().setValue(30);
 	  	
 	  	/*
@@ -411,8 +385,38 @@ public class CNMining
     	}	
 
     	return new Object[] { flexDiagram, diagram.startTaskNodes, diagram.endTaskNodes, diagram.annotations };
+	
 	}
 	
+	public static Object[] startCNMining(UIPluginContext context, XLog log, Settings settings, boolean uiMode) throws Exception
+	{
+		ConstraintsManager vincoli = new ConstraintsManager();
+		
+		if(uiMode)
+			context.getProgress().setValue(1);
+		
+		System.out.println("\nCNMining\n\nSettings:");
+	    System.out.println("Sigma log noise: " + settings.sigmaLogNoise);
+	    System.out.println("Delta fall factor: " + settings.fallFactor);
+	    System.out.println("Relative to best: " + settings.relativeToBest);
+
+		CNMining cnmining = new CNMining();
+		
+		boolean vincoliDisponibili = cnmining.caricaVincoli(vincoli, settings);
+ 
+		cnmining.aggiungiAttivitaFittizia(log);
+		
+		UnfoldResult unfoldResult = LogUnfolder.unfold(log);
+     
+		if (vincoliDisponibili) {
+			cnmining.creaVincoliUnfolded(
+				vincoli.positivi, vincoli.negati, vincoli.forbidden, vincoli.positiviUnfolded, 
+				vincoli.negatiUnfolded, vincoli.forbiddenUnfolded, unfoldResult.map
+			);
+		}
+		return CausalScoreMatrix(context, log, settings, uiMode, vincoli, cnmining, vincoliDisponibili, unfoldResult)
+	}
+
 	private boolean caricaVincoli(ConstraintsManager vincoli, Settings settings){
 		if (settings.areConstraintsAvailable()) {
 			if (settings.constraintsFilename.equals("")) {
